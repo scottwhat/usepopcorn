@@ -1,22 +1,32 @@
-import { useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import StarRating from "./StarRating";
+import { useMovies } from "./useMovies";
 
-const tempMovieData = [];
 const tempWatchedData = [];
+const KEY = "5d0a7cf1";
 
 const average = (arr) =>
   arr.reduce((acc, cur, i, arr) => acc + cur / arr.length, 0);
 
-const KEY = "5d0a7cf1";
 
 export default function App() {
-  const [movies, setMovies] = useState(tempMovieData);
-  const [watched, setWatched] = useState([]); // const
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+ 
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
 
+
+  const  {movies, isLoading, error } = useMovies(query)
+
+  const [watched, setWatched] = useState(function () {
+    const storedValue = localStorage.getItem("watched");
+    return storedValue ? JSON.parse(storedValue) : [];
+    // return storedValue != null ? storedValue : [];
+    // return JSON.parse(storedValue);
+  }); // const
+
+
+
+  // const [watched, setWatched] = useState([]); // const
   function handleSelectMovie(id) {
     setSelectedId((selectedId) => (id === selectedId ? null : id));
   }
@@ -28,6 +38,8 @@ export default function App() {
   // how to update arrays, spread in the old array and, the new element
   function handleAddWatched(movie) {
     setWatched((watchted) => [...watched, movie]);
+
+    //pass watched as an updated array with the new movie otherwise will get stale state
   }
 
   function handleDeleteWatched(id) {
@@ -36,58 +48,16 @@ export default function App() {
 
   //
 
+  //useeffect means that whenever watched changes, even if delted, it will reset the watched + local storatge
+
   useEffect(
     function () {
-      const controller = new AbortController();
-
-      //define it here, let it async run
-      async function fetchMovies() {
-        try {
-          setIsLoading(true);
-          setError("");
-          const res = await fetch(
-            `http://www.omdbapi.com/?apikey=${KEY}&s=${query}`,
-            { signal: controller.signal }
-          );
-
-          if (!res.ok) throw new Error("sumting wong");
-
-          const data = await res.json();
-
-          if (data.Response == "False") {
-            throw new Error("Movie not found");
-          }
-          setMovies(data.Search);
-          setError("");
-        } catch (err) {
-          console.log(err.message);
-          //takes the throw new Error messag and displays it
-
-          //to stop the clean up function setting errors
-          if (err.name !== "AbortError") {
-            setError(err.message);
-          }
-        } finally {
-          setIsLoading(false);
-        }
-      }
-
-      //fixing race conditions firing
-      if (query.length < 3) {
-        setMovies([]);
-        setError("");
-        return;
-      }
-
-      handleCloseMovie();
-      fetchMovies();
-
-      return function () {
-        controller.abort();
-      };
+      localStorage.setItem("watched", JSON.stringify(watched));
     },
-    [query]
+    [watched]
   );
+
+ 
   // the dependency array, empty, only runs on mount
 
   //#: what is Data.Search, specifically Search?
@@ -169,7 +139,33 @@ function NumResults({ movies }) {
   );
 }
 
+
 function Search({ query, setQuery }) {
+
+  const inputEl = useRef(null)
+
+  useEffect(function() {
+
+    function callback(e) {
+      if(e.code === "Enter") {
+
+        if(document.activeElement === inputEl.current) {
+          return;
+        }
+        
+        inputEl.current.focus()
+        setQuery("") 
+      }
+
+    }
+
+    document.addEventListener('keydown', callback);
+    return () => document.removeEventListener("keydown", callback)
+
+  }, [setQuery])
+
+   
+
   return (
     <input
       className="search"
@@ -177,6 +173,7 @@ function Search({ query, setQuery }) {
       placeholder="Search movies..."
       value={query}
       onChange={(e) => setQuery(e.target.value)}
+      ref={inputEl}
     />
   );
 }
@@ -250,6 +247,15 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
   const [isLoading, setIsLoading] = useState(false);
   const [userRating, setUserRating] = useState("");
 
+  const countRef = useRef(0)
+
+  useEffect(function() {
+
+    if(userRating) {
+      countRef.current = countRef.current + 1;
+    }
+  }, [userRating])
+
   const isWatched = watched.map((movie) => movie.imdbID).includes(selectedId);
   const watchedUserRating = watched.find(
     (movie) => movie.imdbID === selectedId
@@ -260,7 +266,7 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
     Year: year,
     Poster: poster,
     Runtime: runtime,
-    imdbRating,
+    imdbRating, 
     Plot: plot,
     Realeased: released,
     Actors: actors,
@@ -268,6 +274,11 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
     Genre: genre,
     imdbID: imdbID,
   } = movie;
+
+  const isTop = imdbRating > 8; 
+  console.log(isTop);
+
+  const [avgRating, setAvgRating] = useState(0);
 
   //handler setup,
   //create new objects, set whatever state. then call function
@@ -280,9 +291,14 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
       imdbRating: Number(imdbRating),
       runtime: Number(runtime.split("").at(0)),
       userRating,
+      countRatingDecisions: countRef.current,
     };
     onAddWatched(newWatchedMovie);
     onCloseMovie();
+
+    //state gets updated async, not immediately available 
+    setAvgRating(Number(imdbRating))
+   setAvgRating((avgRating + userRating / 2))
   }
 
   useEffect(
