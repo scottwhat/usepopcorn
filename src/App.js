@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from "react";
 import StarRating from "./StarRating";
 import { useMovies } from "./useMovies";
+import { useLocalStorageState } from "./useLocalStorageState";
+import { useKey } from "./useKey";
 
 const tempWatchedData = [];
 const KEY = "5d0a7cf1";
@@ -17,12 +19,8 @@ export default function App() {
 
   const  {movies, isLoading, error } = useMovies(query)
 
-  const [watched, setWatched] = useState(function () {
-    const storedValue = localStorage.getItem("watched");
-    return storedValue ? JSON.parse(storedValue) : [];
-    // return storedValue != null ? storedValue : [];
-    // return JSON.parse(storedValue);
-  }); // const
+
+  const [watched, setWatched] = useLocalStorageState([], "watched")
 
 
 
@@ -50,12 +48,7 @@ export default function App() {
 
   //useeffect means that whenever watched changes, even if delted, it will reset the watched + local storatge
 
-  useEffect(
-    function () {
-      localStorage.setItem("watched", JSON.stringify(watched));
-    },
-    [watched]
-  );
+
 
  
   // the dependency array, empty, only runs on mount
@@ -301,22 +294,8 @@ function MovieDetails({ selectedId, onCloseMovie, onAddWatched, watched }) {
    setAvgRating((avgRating + userRating / 2))
   }
 
-  useEffect(
-    function () {
-      function callback(e) {
-        if (e.code === "Escape") {
-          onCloseMovie();
-        }
-      }
-      document.addEventListener("keydown", callback);
+  useKey('Escape', onCloseMovie)
 
-      //once the component unmounts remove the extra event listener
-      return function () {
-        document.removeEventListener("keydown", callback);
-      };
-    },
-    [onCloseMovie]
-  );
 
   useEffect(
     function () {

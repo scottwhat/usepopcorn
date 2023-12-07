@@ -12,6 +12,7 @@ export function useMovies(query)
 
     useEffect(
         function () {
+            // callback?.()
           const controller = new AbortController();
     
           //define it here, let it async run
